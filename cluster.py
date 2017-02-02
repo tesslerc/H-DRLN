@@ -116,6 +116,7 @@ while True:
     clusterStartTmp = []
     clusterEndTmp = []
 
+    tsneOutTmp = np.zeros((numGaussians, len(data)))
     '''
     tsneMatch = []  # color based on best gaussian matched
     tsneMatch.append([])  # x
@@ -134,7 +135,7 @@ while True:
             startIndex = endIndices[j - 1] + 1
 
         finalDots[:, 0:(endIndices[j] - startIndex), j:(j + 1)] = np.ones((3, (endIndices[j] - startIndex), 1))
-
+	
         finalGaussian[:, 0:(endIndices[j] - startIndex), j:(j + 1)] = np.ones((3, (endIndices[j] - startIndex), 1))
         _maxGaussian = 0
 
@@ -172,9 +173,10 @@ while True:
                 colorCoded[2,:,:] = colorCoded[2,:,:] * colors[i % 8, 2]
                 finalDots[:, maxIndex['start']:maxIndex['end'], j:(j + 1)] = finalDots[:, maxIndex['start']:maxIndex['end'], j:(j + 1)] + colorCoded
                 '''
-                model = gmm
 
                 finalDots[i % 3, maxIndex['start']:maxIndex['end'], j:(j + 1)] = finalDots[i % 3, maxIndex['start']:maxIndex['end'], j:(j + 1)] * 0.8
+				
+                tsneOutTmp[i, maxIndex['start'] + startIndex:maxIndex['end'] + startIndex] = 1
                 # First state
                 #print('Gaussian #' + str(i) + ' start')
                 #plt.imshow(states[maxIndex['start'] + startIndex, :].reshape(84, 84), cmap='gray')
@@ -200,7 +202,9 @@ while True:
         bestUniformity = uniformity
         clusterStart = clusterStartTmp
         clusterEnd = clusterEndTmp
-
+        tsneOut = tsneOutTmp
+        model = gmm
+	
     if (bestGaussians + 2) < numGaussians or numGaussians == 5 and nth_iteration == 6:  # TODO
         break
     if nth_iteration > 5:
@@ -212,10 +216,13 @@ while True:
 activationsOut = []
 terminationOut = []
 actionsOut = []
+
+'''
 tsneOut = []
 tsneOut.append([])  # x
 tsneOut.append([])  # y
 tsneOut.append([])  # color
+'''
 for j in range(np.array(clusterStart).shape[0]):
     activationsOut.append([])
     terminationOut.append([])
@@ -226,15 +233,16 @@ for j in range(np.array(clusterStart).shape[0]):
                 activationsOut[j].append(data[index, :])
                 terminationOut[j].append(0)
                 actionsOut[j].append(act[index])
-
+                '''
                 tsneOut[0].append(tsne[index, 0])
                 tsneOut[1].append(tsne[index, 1])
                 tsneOut[2].append(j)
-
+                '''
 
             terminationOut[j][np.array(terminationOut[j]).shape[0] - 1] = 1
         # print('Gaussian: ' + str(j) + ', StartIdx: ' + str(clusterStart[j][i]) + ', EndIdx: ' + str(clusterEnd[j][i]))
 
+		
 print('Best match is: ' + str(bestGaussians) + ' gaussians, with ' + str(bestUsage) + ' percent usage of states.')
 for i in range(np.array(activationsOut).shape[0]):
     print('Now looking at skill #' + str(i) + ' activations looks like: ' + str(np.array(activationsOut[i]).shape))
@@ -249,7 +257,7 @@ for i in range(np.array(clusterStart).shape[0]):
 dataOut = h5py.File('tsneData.h5', 'w')
 dataOut.create_dataset('data', data=tsneOut)
 
-probability = gmm.predict_proba(data)
+probability = model.predict_proba(data)
 tsneMatch = np.zeros(data.shape[0])
 for i in range(data.shape[0]):
     tsneMatch[i] = np.argmax(probability[i])
