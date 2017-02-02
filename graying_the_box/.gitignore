@@ -1,0 +1,6 @@
+*.bin
+*.h5
+*.pyc
+*.so
+*.o
+data/
