@@ -22,12 +22,9 @@ import random
 def ClusteringCompare(usage_a, uniformity_a, numGaussians_a, usage_b, uniformity_b, numGaussians_b):
     score_a = 1.0 * usage_a * usage_a * usage_a * uniformity_a * numGaussians_a
     score_b = 1.0 * usage_b * usage_b * usage_b * uniformity_b * numGaussians_b
-    #if usage_b > 0:
     print('Comparing ' + str(numGaussians_a) + ' gaussians, ' + str(usage_a) + '% usage, ' + str(uniformity_a) + ' uniformity = ' + str(score_a) + '; against ' + str(numGaussians_b) + ' gaussians, ' + str(usage_b) + '% usage, ' + str(uniformity_b) + ' uniformity = ' + str(score_b) + '.')
     if score_a > score_b:
         return True
-    #if (usage_a > 0.75 and (usage_a + (numGaussians_a - numGaussians_b) * 0.05 > usage_b) or (usage_a > usage_b)):
-    #    return True
     return False
 
 
@@ -52,12 +49,6 @@ def P(r, probability, minProbability, minLength, maxLength):
                 startEnd['end'] = s
     return startEnd, maxProb
 
-    # npProb = 0
-    # if index > 0:
-    #     npProb += np.sum(probability[0:index, r]) / index / 2
-    # if index < len(probability):
-    #     npProb += np.sum(probability[index:len(probability), 1 - r]) / (len(probability) - index) / 2
-    # return npProb
 numGaussians = 2
 bestUsage = 0
 bestUniformity = 0
@@ -135,7 +126,7 @@ while True:
             startIndex = endIndices[j - 1] + 1
 
         finalDots[:, 0:(endIndices[j] - startIndex), j:(j + 1)] = np.ones((3, (endIndices[j] - startIndex), 1))
-	
+
         finalGaussian[:, 0:(endIndices[j] - startIndex), j:(j + 1)] = np.ones((3, (endIndices[j] - startIndex), 1))
         _maxGaussian = 0
 
@@ -175,7 +166,7 @@ while True:
                 '''
 
                 finalDots[i % 3, maxIndex['start']:maxIndex['end'], j:(j + 1)] = finalDots[i % 3, maxIndex['start']:maxIndex['end'], j:(j + 1)] * 0.8
-				
+
                 tsneOutTmp[i, maxIndex['start'] + startIndex:maxIndex['end'] + startIndex] = 1
                 # First state
                 #print('Gaussian #' + str(i) + ' start')
@@ -204,7 +195,7 @@ while True:
         clusterEnd = clusterEndTmp
         tsneOut = tsneOutTmp
         model = gmm
-	
+
     if (bestGaussians + 2) < numGaussians or numGaussians == 5 and nth_iteration == 6:  # TODO
         break
     if nth_iteration > 5:
@@ -242,7 +233,7 @@ for j in range(np.array(clusterStart).shape[0]):
             terminationOut[j][np.array(terminationOut[j]).shape[0] - 1] = 1
         # print('Gaussian: ' + str(j) + ', StartIdx: ' + str(clusterStart[j][i]) + ', EndIdx: ' + str(clusterEnd[j][i]))
 
-		
+
 print('Best match is: ' + str(bestGaussians) + ' gaussians, with ' + str(bestUsage) + ' percent usage of states.')
 for i in range(np.array(activationsOut).shape[0]):
     print('Now looking at skill #' + str(i) + ' activations looks like: ' + str(np.array(activationsOut[i]).shape))
@@ -289,24 +280,3 @@ plt.figure(figsize=(20, 10))
 plt.imshow(a)
 # plt.savefig('ColorBasedOnCuts_clean_20000.png')
 plt.show()
-
-'''
-def softmax(x):
-    """Compute softmax values for each sets of scores in x."""
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0) # only difference
-
-while optimizing
-    gradient = 0
-    for all items in array
-        act = zeros(#actions)
-        act[action[i]] = 1
-        gradient = gradient + dW(expectated, act)
-    location(n) = location(n-1) - gradient / norm(gradient)
-
-
-T = W.transpose().dot(x)
-U = softmax(T)
-O = Kullback-Leiblier(U)
-dW = dO/dW = (dU/dW).dot(dO/dU) = (dT/dW).dot(dU/dT).dot(dO/dU) = x.dot(dU/dT).dot(dO/dU)
-'''
