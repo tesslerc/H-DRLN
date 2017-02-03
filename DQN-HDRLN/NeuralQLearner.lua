@@ -149,7 +149,6 @@ function nql:__init(args)
       	concat = nn.Concat(2)
 
         -- this is for utilizing hidden layer
-      	--
         for i = 1, numSkills
         do
         	skill = nn.Sequential()
@@ -158,30 +157,10 @@ function nql:__init(args)
         	skill:add(nn.Linear(hiddenSize, 5))
         	concat:add(skill)
         end
-      	--]]
-
-        -- this is for linear layer only
-      	--[[
-      	skill = nn.Sequential()
-      	skill:add(nn.Linear(512, 5))
-      	concat:add(skill)
-
-      	skill = nn.Sequential()
-      	skill:add(nn.Linear(512, 5))
-      	concat:add(skill)
-
-      	skill = nn.Sequential()
-      	skill:add(nn.Linear(512, 5))
-      	concat:add(skill)
-
-      	skill = nn.Sequential()
-      	skill:add(nn.Linear(512, 5))
-      	concat:add(skill)
-      	--]]
       	self.network:add(concat)
 
       	print(self.network)
-      --
+        -- load weights into split network
         for i = 0, (numSkills-1)
         do
         	self.network.modules[11].modules[i + 1].modules[1].weight[{{1, hiddenSize}, {1, 512}}] = torch.Tensor(512,hiddenSize):copy(myFile:read('W_hidden_' .. i):all()):t()
@@ -190,26 +169,7 @@ function nql:__init(args)
         	self.network.modules[11].modules[i + 1].modules[3].bias[{{1, 5}}] = torch.Tensor(5):copy(myFile:read('b_output_' .. i):all())
         end
       	myFile:close()
-      --]]
-        -- this is for loading LSTD-Q weights
-      --[[
-      	local weights0 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights0.t7')
-      	local biases0 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases0.t7')
-      	local weights1 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights1.t7')
-      	local biases1 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases1.t7')
-      	local weights2 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights2.t7')
-      	local biases2 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases2.t7')
-
-      	self.network.modules[11].modules[1].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights0)
-      	self.network.modules[11].modules[1].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases0)
-      	self.network.modules[11].modules[2].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights1)
-      	self.network.modules[11].modules[2].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases1)
-      	self.network.modules[11].modules[3].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights2)
-      	self.network.modules[11].modules[3].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases2)
-      --]]
     end
-
-    --print(self.network)
 
     if self.gpu and self.gpu >= 0 then
         self.network:cuda()
