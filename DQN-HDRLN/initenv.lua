@@ -195,7 +195,7 @@ function setup(_opt)
       _opt.distilled_agent_params.distilled_network = false
       _opt.distilled_agent_params.distill   = false
       _opt.agent_params.supervised_skills = supervised_skills
-      _opt.agent_params.supervised_file = supervised_file
+      _opt.agent_params.supervised_file = args.supervised_file
       if _opt.distilled_network ~= '' then
           _opt.distilled_agent_params.network = _opt.distilled_network
       end
