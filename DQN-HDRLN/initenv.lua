@@ -127,22 +127,45 @@ function setup(_opt)
     --- first things first
     local opt = torchSetup(_opt)
 
-    -- load training framework and environment
-    --local framework = require(opt.framework)
-    --assert(framework)
+    local distilled_hdrln = _opt.distilled_hdrln
+    if distilled_hdrln == "true" then
+      distilled_hdrln = true
+    else
+      distilled_hdrln = false
+    end
+    local supervised_skills = _opt.supervised_skills
+    if supervised_skills == "true" then
+      supervised_skills = true
+    else
+      supervised_skills = false
+    end
 
-    --local gameEnv = framework.GameEnvironment(opt)
-    --local gameActions = gameEnv:getActions()
+    local num_skills = tonumber(_opt.num_skills)
+
     local gameEnv = nil
-    local MCgameActions = {1,3,4,5,0,6,7,8,9} --,9}--{1,3,4,5,0,6,7,8,9,1,3,4,1,3,4,1,3,4,5,1,3,4,0} -- this is our game actions table
+
     local MCgameActions_primitive = {1,3,4,0,5} -- this is our game actions table
-    local optionsActions = {6,7,8,9}--{6,7,8,9} -- these actions are correlated to an OPTION, 20 = solve room (make this struct with max iterations per option and socket port and ip)
+    local MCgameActions = MCgameActions_primitive:copy()
+    local optionsActions = {} -- these actions are correlated to an OPTION
+
+    local max_action_val = MCgameActions_primitive[1]
+    for i = 2, #MCgameActions_primitive
+    do
+      max_action_val = max(max_action_val, MCgameActions_primitive[i])
+    end
+
+    for i = 1, num_skills
+    do
+      MCgameActions[#MCgameActions + 1] = i + max_action_val
+      optionsActions[#optionsActions + 1] = i + max_action_val
+    end
 
     local controlActions = {6,7,8,9} --{1,3,4,5,0,6,7,8} -- total is 9 -- this is our game actions table
-    local navigateActions = {1,3,4,0,5}--{1,3,4} -- total is 3
-    local pickupActions =  {1,3,4,0,5} --{1,3,4} -- total is 3
-    local breakActions =  {1,3,4,0,5} --{1,3,4,5} -- total is 4
-    local placeActions =  {1,3,4,0,5} --{1,3,4,0} -- total is 4
+    -- availiable actions per agent -- make this dynamic
+    local navigateActions = {1,3,4,0,5}
+    local pickupActions =  {1,3,4,0,5}
+    local breakActions =  {1,3,4,0,5}
+    local placeActions =  {1,3,4,0,5}
 
     -- agent options
     _opt.agent_params.actions   = MCgameActions
@@ -150,11 +173,11 @@ function setup(_opt)
     _opt.agent_params.optionsActions = {navigateActions, pickupActions, breakActions, placeActions}
     _opt.agent_params.gpu       = _opt.gpu
     _opt.agent_params.best      = _opt.best
-    _opt.agent_params.distilled_network = true
+    _opt.agent_params.distilled_network = distilled_hdrln
     _opt.agent_params.distill   = false
     if _opt.agent_params.network then
-	print(_opt.agent_params.network)
-	_opt.agent_params.network = "convnet_atari_main"
+	     print(_opt.agent_params.network)
+	     _opt.agent_params.network = "convnet_atari_main"
     end
     --_opt.agent_params.network = "convnet_atari3"
     if _opt.network ~= '' then
@@ -165,108 +188,86 @@ function setup(_opt)
     if not _opt.agent_params.state_dim then
         _opt.agent_params.state_dim = gameEnv:nObsFeature()
     end
---
-    _opt.distilled_agent_params.actions   = navigateActions
-    _opt.distilled_agent_params.gpu       = _opt.gpu
-    _opt.distilled_agent_params.best      = _opt.best
-    _opt.distilled_agent_params.distilled_network = false
-    _opt.distilled_agent_params.distill   = false
-    if _opt.distilled_network ~= '' then
-        _opt.distilled_agent_params.network = _opt.distilled_network
-	--_opt.agent_params.network = _opt.distilled_network
-    end
-    _opt.distilled_agent_params.verbose = _opt.verbose
-    if not _opt.distilled_agent_params.state_dim then
-        _opt.distilled_agent_params.state_dim = gameEnv:nObsFeature()
-    end
-    print("DISTILLED NETWORK")
-    local distilled_agent = dqn[_opt.agent](_opt.distilled_agent_params)
-    print("DISTILLED NETWORK")
---]]
---[[
-    _opt.navigate_agent_params.actions   = navigateActions
-    _opt.navigate_agent_params.gpu       = _opt.gpu
-    _opt.navigate_agent_params.best      = _opt.best
-    _opt.navigate_agent_params.distilled_network = false
-    _opt.navigate_agent_params.distill   = false
-    if _opt.navigate_network ~= '' then
-        _opt.navigate_agent_params.network = _opt.navigate_network
-    end
-    _opt.navigate_agent_params.verbose = _opt.verbose
-    if not _opt.navigate_agent_params.state_dim then
-        _opt.navigate_agent_params.state_dim = gameEnv:nObsFeature()
-    end
-	  local navigate_agent = dqn[_opt.agent](_opt.navigate_agent_params)
+    if distilled_hdrln then
+      _opt.distilled_agent_params.actions   = navigateActions
+      _opt.distilled_agent_params.gpu       = _opt.gpu
+      _opt.distilled_agent_params.best      = _opt.best
+      _opt.distilled_agent_params.distilled_network = false
+      _opt.distilled_agent_params.distill   = false
+      _opt.agent_params.supervised_skills = supervised_skills
+      _opt.agent_params.supervised_file = supervised_file
+      if _opt.distilled_network ~= '' then
+          _opt.distilled_agent_params.network = _opt.distilled_network
+      end
+      _opt.distilled_agent_params.verbose = _opt.verbose
+      if not _opt.distilled_agent_params.state_dim then
+          _opt.distilled_agent_params.state_dim = gameEnv:nObsFeature()
+      end
+      print("DISTILLED NETWORK")
+      local distilled_agent = dqn[_opt.agent](_opt.distilled_agent_params)
+      print("DISTILLED NETWORK")
 
-    _opt.pickup_agent_params.actions   = pickupActions
-    _opt.pickup_agent_params.gpu       = _opt.gpu
-    _opt.pickup_agent_params.best      = _opt.best
-    _opt.pickup_agent_params.distilled_network = false
-    _opt.pickup_agent_params.distill   = false
-    if _opt.pickup_network ~= '' then
-        _opt.pickup_agent_params.network = _opt.pickup_network
-    end
-    _opt.pickup_agent_params.verbose = _opt.verbose
-    if not _opt.pickup_agent_params.state_dim then
-        _opt.pickup_agent_params.state_dim = gameEnv:nObsFeature()
-    end
-	  local pickup_agent = dqn[_opt.agent](_opt.pickup_agent_params)
+      _opt.agent_params.skill_agent = distilled_agent
+    else
+      _opt.navigate_agent_params.actions   = navigateActions
+      _opt.navigate_agent_params.gpu       = _opt.gpu
+      _opt.navigate_agent_params.best      = _opt.best
+      _opt.navigate_agent_params.distilled_network = false
+      _opt.navigate_agent_params.distill   = false
+      if _opt.navigate_network ~= '' then
+          _opt.navigate_agent_params.network = _opt.navigate_network
+      end
+      _opt.navigate_agent_params.verbose = _opt.verbose
+      if not _opt.navigate_agent_params.state_dim then
+          _opt.navigate_agent_params.state_dim = gameEnv:nObsFeature()
+      end
+  	  local navigate_agent = dqn[_opt.agent](_opt.navigate_agent_params)
 
-    _opt.break_agent_params.actions   = breakActions
-    _opt.break_agent_params.gpu       = _opt.gpu
-    _opt.break_agent_params.best      = _opt.best
-    _opt.break_agent_params.distilled_network = false
-    _opt.break_agent_params.distill   = false
-    if _opt.break_network ~= '' then
-        _opt.break_agent_params.network = _opt.break_network
-    end
-    _opt.break_agent_params.verbose = _opt.verbose
-    if not _opt.break_agent_params.state_dim then
-        _opt.break_agent_params.state_dim = gameEnv:nObsFeature()
-    end
-	  local break_agent = dqn[_opt.agent](_opt.break_agent_params)
+      _opt.pickup_agent_params.actions   = pickupActions
+      _opt.pickup_agent_params.gpu       = _opt.gpu
+      _opt.pickup_agent_params.best      = _opt.best
+      _opt.pickup_agent_params.distilled_network = false
+      _opt.pickup_agent_params.distill   = false
+      if _opt.pickup_network ~= '' then
+          _opt.pickup_agent_params.network = _opt.pickup_network
+      end
+      _opt.pickup_agent_params.verbose = _opt.verbose
+      if not _opt.pickup_agent_params.state_dim then
+          _opt.pickup_agent_params.state_dim = gameEnv:nObsFeature()
+      end
+  	  local pickup_agent = dqn[_opt.agent](_opt.pickup_agent_params)
+
+      _opt.break_agent_params.actions   = breakActions
+      _opt.break_agent_params.gpu       = _opt.gpu
+      _opt.break_agent_params.best      = _opt.best
+      _opt.break_agent_params.distilled_network = false
+      _opt.break_agent_params.distill   = false
+      if _opt.break_network ~= '' then
+          _opt.break_agent_params.network = _opt.break_network
+      end
+      _opt.break_agent_params.verbose = _opt.verbose
+      if not _opt.break_agent_params.state_dim then
+          _opt.break_agent_params.state_dim = gameEnv:nObsFeature()
+      end
+  	  local break_agent = dqn[_opt.agent](_opt.break_agent_params)
 
 
-    _opt.place_agent_params.actions   = placeActions
-    _opt.place_agent_params.gpu       = _opt.gpu
-    _opt.place_agent_params.best      = _opt.best
-    _opt.place_agent_params.distilled_network = false
-    _opt.place_agent_params.distill   = false
-    if _opt.place_network ~= '' then
-        _opt.place_agent_params.network = _opt.place_network
+      _opt.place_agent_params.actions   = placeActions
+      _opt.place_agent_params.gpu       = _opt.gpu
+      _opt.place_agent_params.best      = _opt.best
+      _opt.place_agent_params.distilled_network = false
+      _opt.place_agent_params.distill   = false
+      if _opt.place_network ~= '' then
+          _opt.place_agent_params.network = _opt.place_network
+      end
+      _opt.place_agent_params.verbose = _opt.verbose
+      if not _opt.place_agent_params.state_dim then
+          _opt.place_agent_params.state_dim = gameEnv:nObsFeature()
+      end
+  	  local place_agent = dqn[_opt.agent](_opt.place_agent_params)
+      _opt.agent_params.skill_agent = {navigate_agent, pickup_agent, break_agent, place_agent}
     end
-    _opt.place_agent_params.verbose = _opt.verbose
-    if not _opt.place_agent_params.state_dim then
-        _opt.place_agent_params.state_dim = gameEnv:nObsFeature()
-    end
-	  local place_agent = dqn[_opt.agent](_opt.place_agent_params)
 
---]]
-    -- create controller agent instance with its own sub networks
-    --[[
-    local _place_agent = dqn[_opt.agent](_opt.place_agent_params)
-    local _break_agent = dqn[_opt.agent](_opt.break_agent_params)
-    local _navigate_agent = dqn[_opt.agent](_opt.navigate_agent_params)
-    local _pickup_agent = dqn[_opt.agent](_opt.pickup_agent_params)
-    _opt.control_agent_params.actions   = controlActions
-    _opt.control_agent_params.gpu       = _opt.gpu
-    _opt.control_agent_params.best      = _opt.best
-    _opt.control_agent_params.distilled_network = false
-    _opt.control_agent_params.distill   = false
-    if _opt.control_network ~= '' then
-        _opt.control_agent_params.network = _opt.control_network
-    end
-    _opt.control_agent_params.verbose = _opt.verbose
-    if not _opt.control_agent_params.state_dim then
-        _opt.control_agent_params.state_dim = gameEnv:nObsFeature()
-    end
-    _opt.control_agent_params.skill_agent = {_navigate_agent, _pickup_agent, _break_agent, _place_agent} -- set skill_agent inside so we can access from inside agent (inside the perceive)
-    _opt.control_agent_params.primitive_actions = MCgameActions_primitive
-    local control_agent = dqn[_opt.agent](_opt.control_agent_params) -- control agent instanciation
-    --]]
-
-    _opt.agent_params.skill_agent = distilled_agent--{navigate_agent, pickup_agent, break_agent, place_agent} -- set skill_agent inside so we can access from inside agent (inside the perceive)
-    --_opt.agent_params.skill_agent = {navigate_agent, pickup_agent, break_agent, place_agent} -- set skill_agent inside
     _opt.agent_params.primitive_actions = MCgameActions_primitive
     print("MAIN AGENT")
     local agent = dqn[_opt.agent](_opt.agent_params)
