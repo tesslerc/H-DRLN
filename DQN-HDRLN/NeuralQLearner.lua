@@ -41,11 +41,11 @@ function nql:__init(args)
     self.distill_index = 1
 
     if args.skill_agent then
-	print("This is the main agent!")
-        self.main_agent = true
-        self.skill_agent = args.skill_agent
-        self.primitive_actions = args.primitive_actions
-        self.n_primitive_actions = #self.primitive_actions
+	     print("This is the main agent!")
+       self.main_agent = true
+       self.skill_agent = args.skill_agent
+       self.primitive_actions = args.primitive_actions
+       self.n_primitive_actions = #self.primitive_actions
     end
     self.verbose    = args.verbose
     self.best       = args.best
@@ -138,98 +138,75 @@ function nql:__init(args)
         self.network = self:network()
     end
 
-    if self.main_agent == true then
-        --self.network:remove(11)
-	--self.network:add(nn.Linear(512, 9))
-    else
+    if self.main_agent ~= true and args.supervised_skills then
         self.network:remove(11)
 
-	local hiddenSize = 100
+        local myFile = hdf5.open(args.supervised_file, 'r')
 
-	concat = nn.Concat(2)
-	--
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, hiddenSize))
-	skill:add(nn.ReLU())
-	skill:add(nn.Linear(hiddenSize, 5))
-	concat:add(skill)
+      	local hiddenSize = myFile:read('hiddenWidth'):all()
+        local numSkills = myFile:read('numberSkills'):all()
 
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, hiddenSize))
-	skill:add(nn.ReLU())
-	skill:add(nn.Linear(hiddenSize, 5))
-	concat:add(skill)
+      	concat = nn.Concat(2)
 
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, hiddenSize))
-	skill:add(nn.ReLU())
-	skill:add(nn.Linear(hiddenSize, 5))
-	concat:add(skill)
+        -- this is for utilizing hidden layer
+      	--
+        for i = 1, numSkills
+        do
+        	skill = nn.Sequential()
+        	skill:add(nn.Linear(512, hiddenSize))
+        	skill:add(nn.ReLU())
+        	skill:add(nn.Linear(hiddenSize, 5))
+        	concat:add(skill)
+        end
+      	--]]
 
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, hiddenSize))
-	skill:add(nn.ReLU())
-	skill:add(nn.Linear(hiddenSize, 5))
-	concat:add(skill)
-	--]]
-	--[[
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, 5))
-	concat:add(skill)
+        -- this is for linear layer only
+      	--[[
+      	skill = nn.Sequential()
+      	skill:add(nn.Linear(512, 5))
+      	concat:add(skill)
 
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, 5))
-	concat:add(skill)
+      	skill = nn.Sequential()
+      	skill:add(nn.Linear(512, 5))
+      	concat:add(skill)
 
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, 5))
-	concat:add(skill)
+      	skill = nn.Sequential()
+      	skill:add(nn.Linear(512, 5))
+      	concat:add(skill)
 
-	skill = nn.Sequential()
-	skill:add(nn.Linear(512, 5))
-	concat:add(skill)
-	--]]
-	self.network:add(concat)
+      	skill = nn.Sequential()
+      	skill:add(nn.Linear(512, 5))
+      	concat:add(skill)
+      	--]]
+      	self.network:add(concat)
 
-	print(self.network)
---
-	local myFile = hdf5.open('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/skillWeights.h5', 'r')
-	--local myFile = hdf5.open('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/skillWeights_OneSkill.h5', 'r')
+      	print(self.network)
+      --
+        for i = 0, (numSkills-1)
+        do
+        	self.network.modules[11].modules[i + 1].modules[1].weight[{{1, hiddenSize}, {1, 512}}] = torch.Tensor(512,hiddenSize):copy(myFile:read('W_hidden_' .. i):all()):t()
+        	self.network.modules[11].modules[i + 1].modules[1].bias[{{1, hiddenSize}}] = torch.Tensor(hiddenSize):copy(myFile:read('b_hidden_' .. i):all())
+        	self.network.modules[11].modules[i + 1].modules[3].weight[{{1, 5}, {1, hiddenSize}}] = torch.Tensor(hiddenSize,5):copy(myFile:read('W_output_' .. i):all()):t()
+        	self.network.modules[11].modules[i + 1].modules[3].bias[{{1, 5}}] = torch.Tensor(5):copy(myFile:read('b_output_' .. i):all())
+        end
+      	myFile:close()
+      --]]
+        -- this is for loading LSTD-Q weights
+      --[[
+      	local weights0 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights0.t7')
+      	local biases0 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases0.t7')
+      	local weights1 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights1.t7')
+      	local biases1 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases1.t7')
+      	local weights2 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights2.t7')
+      	local biases2 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases2.t7')
 
-	self.network.modules[11].modules[1].modules[1].weight[{{1, hiddenSize}, {1, 512}}] = torch.Tensor(512,hiddenSize):copy(myFile:read('W_hidden_0'):all()):t()
-	self.network.modules[11].modules[1].modules[1].bias[{{1, hiddenSize}}] = torch.Tensor(hiddenSize):copy(myFile:read('b_hidden_0'):all())
-	self.network.modules[11].modules[1].modules[3].weight[{{1, 5}, {1, hiddenSize}}] = torch.Tensor(hiddenSize,5):copy(myFile:read('W_output_0'):all()):t()
-	self.network.modules[11].modules[1].modules[1].bias[{{1, 5}}] = torch.Tensor(5):copy(myFile:read('b_output_0'):all())
-	self.network.modules[11].modules[2].modules[1].weight[{{1, hiddenSize}, {1, 512}}] = torch.Tensor(512,hiddenSize):copy(myFile:read('W_hidden_1'):all()):t()
-	self.network.modules[11].modules[2].modules[1].bias[{{1, hiddenSize}}] = torch.Tensor(hiddenSize):copy(myFile:read('b_hidden_1'):all())
-	self.network.modules[11].modules[2].modules[3].weight[{{1, 5}, {1, hiddenSize}}] = torch.Tensor(hiddenSize,5):copy(myFile:read('W_output_1'):all()):t()
-	self.network.modules[11].modules[2].modules[1].bias[{{1, 5}}] = torch.Tensor(5):copy(myFile:read('b_output_1'):all())
-	self.network.modules[11].modules[3].modules[1].weight[{{1, hiddenSize}, {1, 512}}] = torch.Tensor(512,hiddenSize):copy(myFile:read('W_hidden_2'):all()):t()
-	self.network.modules[11].modules[3].modules[1].bias[{{1, hiddenSize}}] = torch.Tensor(hiddenSize):copy(myFile:read('b_hidden_2'):all())
-	self.network.modules[11].modules[3].modules[3].weight[{{1, 5}, {1, hiddenSize}}] = torch.Tensor(hiddenSize,5):copy(myFile:read('W_output_2'):all()):t()
-	self.network.modules[11].modules[3].modules[1].bias[{{1, 5}}] = torch.Tensor(5):copy(myFile:read('b_output_2'):all())
-	self.network.modules[11].modules[4].modules[1].weight[{{1, hiddenSize}, {1, 512}}] = torch.Tensor(512,hiddenSize):copy(myFile:read('W_hidden_3'):all()):t()
-	self.network.modules[11].modules[4].modules[1].bias[{{1, hiddenSize}}] = torch.Tensor(hiddenSize):copy(myFile:read('b_hidden_3'):all())
-	self.network.modules[11].modules[4].modules[3].weight[{{1, 5}, {1, hiddenSize}}] = torch.Tensor(hiddenSize,5):copy(myFile:read('W_output_3'):all()):t()
-	self.network.modules[11].modules[4].modules[1].bias[{{1, 5}}] = torch.Tensor(5):copy(myFile:read('b_output_3'):all())
-
-	myFile:close()
---]]
---[[
-	local weights0 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights0.t7')
-	local biases0 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases0.t7')
-	local weights1 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights1.t7')
-	local biases1 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases1.t7')
-	local weights2 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/weights2.t7')
-	local biases2 = torch.load('/home/deep5/DQN_Shahar_Chen_oldpc/dqn_distill/biases2.t7')
-
-	self.network.modules[11].modules[1].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights0)
-	self.network.modules[11].modules[1].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases0)
-	self.network.modules[11].modules[2].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights1)
-	self.network.modules[11].modules[2].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases1)
-	self.network.modules[11].modules[3].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights2)
-	self.network.modules[11].modules[3].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases2)
---]]
+      	self.network.modules[11].modules[1].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights0)
+      	self.network.modules[11].modules[1].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases0)
+      	self.network.modules[11].modules[2].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights1)
+      	self.network.modules[11].modules[2].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases1)
+      	self.network.modules[11].modules[3].modules[1].weight[{{1, 5}, {1, 512}}] = torch.Tensor(5, 512):copy(weights2)
+      	self.network.modules[11].modules[3].modules[1].bias[{{1, 5}}] = torch.Tensor(1, 5):copy(biases2)
+      --]]
     end
 
     --print(self.network)
@@ -301,7 +278,7 @@ function nql:__init(args)
       require 'cudnn'
       cudnn.benchmark = true
       cudnn.convert(self.network, cudnn)
-    end  
+    end
 end
 
 
@@ -417,7 +394,7 @@ function nql:getQUpdate(args)
     return targets, delta, q2_max
 end
 
-function nql:getQUpdateDistill(args)
+function nql:getQUpdateDistill(args) -- this is used for policy distillation, irrelevant for standard run of the algorithm
     --local s, a, r, s2, term, delta
     local s, term
     local q, q2, q2_max
@@ -428,7 +405,7 @@ function nql:getQUpdateDistill(args)
     --s2 = args.s2
     term = args.term
 
---    self.distill_index -- index to distill on
+    --self.distill_index -- index to distill on
     -- now we insert the discount into the reward itself (via perceive)
     --temp_discount = self.discount
     --for optionCount = 1, self.n_options do
@@ -451,7 +428,7 @@ function nql:getQUpdateDistill(args)
     -- set delta = expected reward based on skill agent output
     --delta = self.skill_agent[self.distill_index].network:forward(s):float():clone():max(2)
     delta = self.network:forward(s):float():clone()
---   print(delta)
+    --   print(delta)
     -- q = Q(s,a)
     local q_all = self.skill_agent[self.distill_index].network:forward(s):float():clone()
     --q = torch.FloatTensor(q_all:size(1))
@@ -460,9 +437,6 @@ function nql:getQUpdateDistill(args)
     for i=1,q_all:size(1) do
         local action_reward = q_all[{ {i} ,{} }]
         local max_r = action_reward:clone():abs():max()
-        --print(action_reward[1])
-        --print(nn.SoftMax():forward(action_reward[1]))
-        ---softmax = nn.SoftMax():forward(action_reward[1])
         local sum_reward = 0
         for j=1,q_all:size(2) do
             sum_reward = sum_reward + math.exp((action_reward[1][j] + max_r) / 0.1) -- 0.01 = tao
@@ -470,19 +444,6 @@ function nql:getQUpdateDistill(args)
 
         for j=1,q_all:size(2) do
             q[i][j] = math.exp((action_reward[1][j] + max_r) / 0.1) / sum_reward - 1 -- softmax .. 0.01 = tao
-            --[[if q_all:size(2) == 3 then
-               q[i][j] = math.exp((action_reward[1][j] + max_r) / 0.01) / (math.exp((action_reward[1][1] + max_r)/0.01) + math.exp((action_reward[1][2] + max_r)/0.01) + math.exp((action_reward[1][3] + max_r)/0.01)) - 1
-            else
-               q[i][j] = math.exp((action_reward[1][j] + max_r) / 0.01) / (math.exp((action_reward[1][1] + max_r)/0.01) + math.exp((action_reward[1][2] + max_r)/0.01) + math.exp((action_reward[1][3] + max_r)/0.01) + math.exp((action_reward[1][4] + max_r)/0.01)) - 1
-            end--]]
-            ---q[i][j] = softmax[j]
-			   --[[if self.tmp_counter > (4999000*4) then
-				   print(i.." "..j.." "..q[i][j].." "..action_reward[1][j])--.." "..sum_reward.." "..max_r)
-			   end--]]
-            --if i == 1 then
-            --   print(action_reward[1][j].." "..q[i][j])
-            --end
-            --q[i] = q_all[i][opt_begin-1+a[i]]
         end
     end
     local targets
@@ -508,18 +469,18 @@ function nql:getQUpdateDistill(args)
             --if self.tmp_counter > (4*4999000) then
             --   print(i.." "..j.." "..targets[i][j].." "..delta[i][j].." "..q[i][j-opt_begin+1])
             --end
-	    self.optimization_distance = self.optimization_distance + (- delta[i][j] + q[i][j-opt_begin+1])^2
+            self.optimization_distance = self.optimization_distance + (- delta[i][j] + q[i][j-opt_begin+1])^2
         end
     end
 
     if self.tmp_counter == 3999 then
-	print('opt_dist: '..(self.optimization_distance/(4000*(3+3+4+4))))
-	self.tmp_counter = -1
-	self.optimization_distance = 0
+    	print('opt_dist: '..(self.optimization_distance/(4000*(3+3+4+4))))
+    	self.tmp_counter = -1
+    	self.optimization_distance = 0
     end
-   
---print("TARGETS")
---   print(targets)
+
+    --print("TARGETS")
+    --   print(targets)
     if self.gpu >= 0 then targets = targets:cuda() end
 
     return targets, delta
@@ -570,11 +531,11 @@ function nql:qLearnMinibatch()
 end
 
 function nql:qLearnMinibatchDistill(args)
-     local s, t, agent
-   s = args.s
-   t = args.t
---   distill_index = args.distill_index
---print("distill_index = "..self.distill_index)   
+    local s, t, agent
+    s = args.s
+    t = args.t
+    --   distill_index = args.distill_index
+    --print("distill_index = "..self.distill_index)
     -- Perform a minibatch Q-learning update:
     -- w += alpha * (r + gamma max Q(s2,a2) - Q(s,a)) * dQ(s,a)/dw
 
@@ -657,7 +618,7 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
         end
     end
 
-    if self.main_agent then
+    if self.main_agent then -- this allows us to view what the agent receives as input
         local img = torch.FloatTensor(3,84,84)
         for i = 1,84 do
             for j = 1,84 do
@@ -693,30 +654,29 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
         self.transitions:add(self.lastState, self.lastAction, reward, realReward,
             self.lastTerminal, priority)
 
-		-- from here all this shit is for extracting data
+		  -- this is for extracting data
 	    local lastState = previousFullState:resize(1, unpack(self.input_dims))
 	    if self.gpu >= 0 then
-		lastState = lastState:cuda()
+		      lastState = lastState:cuda()
 	    end
 
-	    local q = self.network:forward(lastState):float():squeeze() --[{ {1,3} }]
+	    local q = self.network:forward(lastState):float():squeeze()
 
 	    local nodes = self.network:findModules('nn.Linear')
 	    local activation = nodes[1].output:clone():float()
 
 	    local maxq = q[1]
-	--   Controller
-	    -- Evaluate all other actions (with random tie-breaking)
+
 	    for a = 2, self.n_actions do
-		if q[a] > maxq then
-		    maxq = q[a]
-		end
+    		if q[a] > maxq then
+    		    maxq = q[a]
+    		end
 	    end
 	    print(self.transitions.insertIndex)
 	    self.qvals[self.transitions.insertIndex] = maxq
-    	    self.buf_activation[self.transitions.insertIndex]:copy(activation)
+    	self.buf_activation[self.transitions.insertIndex]:copy(activation)
     end
-
+    -- end extract data section
     if self.numSteps == self.learn_start+1 and not testing then
         self:sample_validation_data()
     end
@@ -733,35 +693,36 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
         if self.gpu >= 0 then
             state = state:cuda()
         end
-	--print(curState)
-	--print(self.skill_agent.network)
-	local skill_state = curState:clone():cuda()
-        local q = self.skill_agent.network:forward(skill_state):float():squeeze()
-        local optionStartIndex = 1
-        for i=1, #self.options do
-            local maxq = q[optionStartIndex]
-            local besta = {optionStartIndex}
 
-            -- Evaluate all other actions (with random tie-breaking)
-            for a = optionStartIndex+1, optionStartIndex+(#self.optionActions[i])-1 do
-                if q[a] > maxq then
-                    besta = { a }
-                    maxq = q[a]
-                elseif q[a] == maxq then
-                    besta[#besta+1] = a
-                end
-            end
-            self.bestq = maxq
+	      local skill_state = curState:clone():cuda()
+        if self.distilled_network then
+          local q = self.skill_agent.network:forward(skill_state):float():squeeze()
+          local optionStartIndex = 1
+          for i=1, #self.options do
+              local maxq = q[optionStartIndex]
+              local besta = {optionStartIndex}
 
-            local r = torch.random(1, #besta)
+              -- Evaluate all other actions (with random tie-breaking)
+              for a = optionStartIndex+1, optionStartIndex+(#self.optionActions[i])-1 do
+                  if q[a] > maxq then
+                      besta = { a }
+                      maxq = q[a]
+                  elseif q[a] == maxq then
+                      besta[#besta+1] = a
+                  end
+              end
+              self.bestq = maxq
 
-            skillAction[i] = besta[r] - optionStartIndex + 1
-	    --[[if skillAction[i] == 4 and i == 4 then
-		skillAction[i] = 5
-	    end--]]
-            optionStartIndex = optionStartIndex + #self.optionActions[i]
-        end--]]
-        --print("skillAction: "..skillAction)
+              local r = torch.random(1, #besta)
+
+              skillAction[i] = besta[r] - optionStartIndex + 1
+              optionStartIndex = optionStartIndex + #self.optionActions[i]
+          end
+        else
+          for i=1, #self.options do
+              skillAction[i] = self.skill_agent[i]:perceive(reward, rawstate, terminal, true, 0) -- when needed, forward on the skill_agent
+          end
+        end
     end
 
     if not terminal then
@@ -769,7 +730,7 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
             actionIndex = self:eGreedy(curState, testing_ep)
             gameAction = actionIndex
             self.lastOption = 0
-	end
+	      end
         -- our code
         local isOption = false
         if self.main_agent then
@@ -783,15 +744,9 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
             self.option_actions_left = self.option_length
             self.option_accumulated_reward = 0
         end
-	print("Option actions left "..self.option_actions_left)
+	      print("Option actions left "..self.option_actions_left)
         if self.option_actions_left > 0 and self.main_agent == true then
             gameAction = skillAction[self.lastOption-self.n_primitive_actions]
-
-            -- TODO: hard-coded!
-            --[[if (self.lastOption-self.n_primitive_actions) == 4 and gameAction == 4 then
-                gameAction = 5
-            end--]]
-            -- end hard-coded
 
             if self.option_actions_left ~= self.option_length then
                 actionIndex = self.n_actions + 1 -- non possible action = during option
@@ -806,6 +761,7 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
     -- %%%%% store option index and option-policy index(index for actions chosen from the option policy)
     self.transitions:add_recent_action(actionIndex)
 
+    -- This section disabled, we run it in parallel while simulator is playing
     --Do some Q-learning updates
     --if self.numSteps > self.learn_start and not testing and
     --self.numSteps % self.update_freq == 0 and actionIndex <= self.n_actions then
@@ -851,10 +807,8 @@ function nql:eGreedy(state, testing_ep)
         math.max(0, (self.ep_start - self.ep_end) * (self.ep_endt -
             math.max(0, self.numSteps - self.learn_start))/self.ep_endt))
     if not testing_ep and self.finished == false then
-	self.ep = math.max(self.ep, 0.5)
+	     self.ep = math.max(self.ep, 0.5)
     end
-    --print("Epsilon (greedy) = " .. self.ep)
-    -- Epsilon greedy
     if torch.uniform() < self.ep then
         return torch.random(1, self.n_actions)
     else
@@ -874,15 +828,12 @@ function nql:greedy(state)
         state = state:cuda()
     end
 
-    local q = self.network:forward(state):float():squeeze() --[{ {1,3} }]
-
---    local nodes = self.network:findModules('nn.Linear')
---    local activation = nodes[1].output:clone():float()
+    local q = self.network:forward(state):float():squeeze()
 
     local maxq = q[1]
     local besta = {1}
 
---   Controller
+    -- Controller
     -- Evaluate all other actions (with random tie-breaking)
     for a = 2, self.n_actions do
         if q[a] > maxq then
@@ -892,90 +843,7 @@ function nql:greedy(state)
             besta[#besta+1] = a
         end
     end
---    print(self.transitions.numEntries)
---    if(self.transitions.numEntries > 0) then
---        self.qvals[self.transitions.numEntries] = maxq
---        self.buf_activation[self.transitions.numEntries]:copy(activation)
---    end
---]]
 
-   --print(self.network:forward(state):float():squeeze())
-
-    -- Evaluate all other actions (with random tie-breaking)
---[[ Navigate
-    maxq = q[1]
-   local skill_q = self.skill_agent.network:forward(state):float():squeeze()
-
-   print("1 "..maxq.." "..skill_q[1])
-    for a = 2, 3 do --self.n_actions
-      print(a.." "..q[a].." "..skill_q[a])
-        if q[a] > maxq then
-            besta = { a }
-            maxq = q[a]
-        elseif q[a] == maxq then
-            besta[#besta+1] = a
-        end
-    end
---]]
---[[ Pickup
-if self.main_agent == true then
-    maxq = q[4]
-   local skill_q = self.skill_agent.network:forward(state):float():squeeze()
-
-   print("1 "..maxq.." "..skill_q[1])
-    for a = 5, 6 do --self.n_actions
-      print((a-3).." "..q[a].." "..skill_q[(a-3)])
-        if q[a] > maxq then
-            besta = { a - 3 }
-            maxq = q[a]
-        elseif q[a] == maxq then
-            besta[#besta+1] = a - 3
-        end
-    end
-end
---]]
---[[ Break
-   
-if self.main_agent == true then
-   local skill_q = self.skill_agent[3].network:forward(state):float():squeeze()
-   maxq = q[7]	
-   print("1 "..maxq.." "..skill_q[1])
-    for a = 8, 10 do --self.n_actions
-      	print((a-6).." "..q[a].." "..skill_q[(a-6)])
-        if q[a] > maxq then
-	    if a == 10 then
-	        besta = { a - 6 } -- \ -5
-	    else
-                besta = { a - 6 }
-	    end
-            maxq = q[a]
-        elseif q[a] == maxq then
-	    if a == 10 then
-                besta[#besta+1] = a - 6 -- \ -5
-	    else
-                besta[#besta+1] = a - 6
-	    end
-        end
-    end
-end
---]]
---[[ Place // make break or place map 0 and 5 differently
-
-if self.main_agent == true then
-   local skill_q = self.skill_agent[4].network:forward(state):float():squeeze()
-   maxq = q[11]
-   print("1 "..maxq.." "..skill_q[1])
-    for a = 12, 14 do --self.n_actions
-      print((a-10).." "..q[a].." "..skill_q[(a-10)])
-        if q[a] > maxq then
-            besta = { a - 10 }
-            maxq = q[a]
-        elseif q[a] == maxq then
-            besta[#besta+1] = a - 10
-        end
-    end
-end
---]]
     self.bestq = maxq
 
     local r = torch.random(1, #besta)
