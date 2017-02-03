@@ -27,6 +27,10 @@ def main(_):
   data = h5py.File(FLAGS.file, 'r')
   numSkills = data.get('numberSkills')
   print('Number of skills is ' + str(numSkills[()]))
+
+  dataOut.create_dataset('hiddenWidth', data=hiddenWidth1)
+  dataOut.create_dataset('numberSkills', data=numSkills)
+
   for skill in range(numSkills[()]):
     activations = np.array(data.get('activations_' + str(skill)))
     actions = (np.array(data.get('actions_' + str(skill))) - 1)
@@ -37,20 +41,20 @@ def main(_):
     step = tf.Variable(0, trainable=False)  # cant attach non trainable variable to gpu
     with tf.device('/gpu:1'):
         x = tf.placeholder(tf.float32, [None, 512, ])
-    
+
 
         # Hidden Layer1
         W_hidden1 = tf.Variable(tf.truncated_normal([512, hiddenWidth1], stddev=0.1))
         b_hidden1 = tf.Variable(tf.constant(0.1, shape=[hiddenWidth1]))
         y_hidden1 = tf.add(tf.matmul(x, W_hidden1), b_hidden1)
         act_hidden1 = tf.nn.relu(y_hidden1)
-        
+
         # Hidden Layer2
         W_hidden2 = tf.Variable(tf.random_uniform([hiddenWidth1, hiddenWidth2], weightInit, 1))
         b_hidden2 = tf.Variable(tf.random_uniform([hiddenWidth2], weightInit, 1))
         y_hidden2 = tf.add(tf.matmul(act_hidden1, W_hidden2), b_hidden2)
         act_hidden2 = tf.nn.relu(y_hidden2)
-        
+
         # Output Layer
         W_output = tf.Variable(tf.truncated_normal([hiddenWidth1, outputWidth], stddev=0.1))
         #W_output = tf.Variable(tf.truncated_normal([hiddenWidth2, outputWidth], stddev=0.1))
@@ -101,7 +105,7 @@ def main(_):
       '''
 
       allQ = sess.run(y,feed_dict={x: activations[index, :]})
-      
+
       Q1 = sess.run(y,feed_dict={x: activations[index + 1, :]})
       targetQ = np.ones(allQ.shape) * -1
       #targetQ = allQ
@@ -115,7 +119,7 @@ def main(_):
         targetQ[i, :] = targetQ[i, :] + Q - gamma * gamma
         targetQ[i, int(actions[index[i]])] = targetQ[i, int(actions[index[i]])] + gamma * gamma
       targetQ = targetQ * 1.0 / maxQ
-      
+
       '''
       targetQ = np.zeros(allQ.shape)
       for i in range(index.shape[0]):
