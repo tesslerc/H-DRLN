@@ -8,13 +8,14 @@ cmd:text()
 cmd:option('-N', '', 'number of states')
 cmd:text()
 cmd:option('-iter', '', 'number of iterations')
+cmd:option('-convert', false, 'convert t7 to hdf5')
 local args = cmd:parse(arg)
-local N =tonumber(args.N)
+local N = tonumber(args.N)
 local maxiter  = tonumber(args.iter)
 
 local pca_dims = 50
 
-local convert_t7_to_hdf5 = false
+local convert_t7_to_hdf5 = cmd:parse(args.convert)
 
 if convert_t7_to_hdf5 then
 	local myFile   = torch.DiskFile('./dqn_distill/hdrln_activations.t7', 'r')
