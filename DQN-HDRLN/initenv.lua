@@ -141,7 +141,11 @@ function setup(_opt)
     end
 
     local num_skills = tonumber(_opt.num_skills)
-
+    if args.supervised_file then
+      local myFile = hdf5.open(args.supervised_file, 'r')
+      num_skills = myFile:read('numberSkills'):all()
+      myFile:close()
+    end
     local gameEnv = nil
 
     local MCgameActions_primitive = {1,3,4,0,5} -- this is our game actions table
