@@ -6,8 +6,17 @@ See LICENSE file for full terms of limited license.
 
 require 'image'
 
+--[[
+  We introduce a new concept called 'Success Memory'. This concept is a
+  variation of the 'Prioritised Experience Replay', in which we give
+  higher priority to trajectories which result in successfuly completing
+  the task.
+  The reason behind this is that we are working in a domain with sparse
+  reward signals, and it allows the agent to 'learn from rare events' such as
+  completing the task (which has low probability during initial training).
+]]
 priorityMemProbability = 0.2
-maxPriorityMemDepth = 100
+maxPriorityMemDepth = 100 -- how much of the trajectory do we remember? (counted from the end)
 local trans = torch.class('dqn.TransitionTable')
 
 
@@ -28,13 +37,13 @@ function trans:__init(args)
 
     self.successIndex = 0
     self.successEntries = 0
-    self.successMemSize = self.maxSize / 100
+    self.successMemSize = self.maxSize / 100 -- success memory is a smaller memory unit
 
     self.option_length = 0
     self.option = args.numActions + 1
     self.numOptions = 0
-    if args.option_length then
-        self.option_length = args.option_length -- our code
+    if args.option_length then -- insert support for options
+        self.option_length = args.option_length
         self.numOptions = #args.options
     end
 
@@ -145,18 +154,16 @@ function trans:sample_one()
         prioritized = true
         while not valid do
             -- start at 2 because of previous action
-            index = torch.random(2, self.successEntries-self.recentMemSize-self.option_length) -- we added -self.option_length so we won't learn during option
+            index = torch.random(2, self.successEntries-self.recentMemSize-self.option_length)
 
-            -- our code
-            --%%%%%%% get option initiation index
-            while self.success_a[index+self.recentMemSize-1] > self.numActions do -- this is an option!@#!
+            -- if selected state received while skill in control, backtrack until state where HDRLN selected this option.
+            while self.success_a[index+self.recentMemSize-1] > self.numActions do
                 index = index - 1
                 if index <= 2 then -- we need also to have at least 1 action before this
                     break
                 end
             end
             if index > 1 then
-                -- end our code
                 if self.success_t[index+self.recentMemSize-1] == 0 then
                     valid = true
                 end
@@ -185,16 +192,14 @@ function trans:sample_one()
             -- start at 2 because of previous action
             index = torch.random(2, self.numEntries-self.recentMemSize-self.option_length)
 
-            -- our code
-            --%%%%%%% get option initiation index
-            while self.a[index+self.recentMemSize-1] > self.numActions do -- this is an option!@#!
+            -- if selected state received while skill in control, backtrack until state where HDRLN selected this option.
+            while self.a[index+self.recentMemSize-1] > self.numActions do
                 index = index - 1
                 if index <= 1 then -- we need also to have at least 1 action before this
                     break
                 end
             end
             if index > 1 then
-                -- end our code
                 if self.t[index+self.recentMemSize-1] == 0 then
                     valid = true
                 end
@@ -222,7 +227,8 @@ function trans:sample_one()
     --print("prioritized =  " .. tostring(prioritized) .. " index = " .. index .. " successEntries = " .. self.successEntries)
     local s, a, r, real_r, s2, t = self:get(index, prioritized)
     if real_r ~= 0 then
-        --Discard actions that lead to terminal state without finishing game (positive reward)
+        -- Terminal state is due to 'timeout', this isn't a real metric the agent can real, and doesn't teach us about the MDP.
+        -- Since when we terminate is arbitrary, we set terminal to false.
         t = 0
     end
     return s, a, r, s2, t
@@ -390,13 +396,15 @@ end
 
 function trans:get(index, prioritized)
     local s
-    --%%%%%% if self.a[ar_index] == option - then get sk by changing index+1 to index+k
+    -- if self.a[ar_index] == option - then get sk by changing index+1 to index+k
     local s2
     local t_index
     local ar_index = index+self.recentMemSize-1
-    -- our code
+
+    -- if selected from prioritized memory
     if prioritized ~= nil and prioritized == true then
         s = self:concatPrioFrames(index)
+        -- if we selected an action, we need to look forward for the 'exit state' of the skill (after N steps or when terminal reached).
         if self.success_a[ar_index] > (self.numActions - self.numOptions) and self.success_t[ar_index] ~= 1 then
             local option_end = 0
             while (ar_index+option_end+1) <= self.successEntries do
@@ -406,15 +414,15 @@ function trans:get(index, prioritized)
                 end
             end
             t_index = option_end
-        else -- end our code
-            t_index = 1 -- our code
+        else
+            t_index = 1
         end
         s2 = self:concatPrioFrames(index+t_index)
         --print("Success - Action1: "..self.success_a[ar_index]..", Action2: "..self.success_a[ar_index+t_index]..", IndexDiff: "..t_index.." Reward: "..self.success_r[ar_index+(t_index-1)].." RealReward: "..self.success_real_r[ar_index+(t_index-1)].." Terminal: "..self.success_t[ar_index+t_index])
-
-        return s, self.success_a[ar_index], self.success_r[ar_index+(t_index-1)], self.success_real_r[ar_index+(t_index-1)], s2, self.success_t[ar_index+t_index] -- we added t_index
-    else
+        return s, self.success_a[ar_index], self.success_r[ar_index+(t_index-1)], self.success_real_r[ar_index+(t_index-1)], s2, self.success_t[ar_index+t_index]
+    else -- not prio memory
         s = self:concatFrames(index)
+        -- if we selected an action, we need to look forward for the 'exit state' of the skill (after N steps or when terminal reached).
         if self.a[ar_index] > (self.numActions - self.numOptions) and self.t[ar_index] ~= 1 then
             local option_end = 0
             while (ar_index+option_end+1) <= self.numEntries do
@@ -424,13 +432,12 @@ function trans:get(index, prioritized)
                 end
             end
             t_index = option_end
-        else -- end our code
-            t_index = 1 -- our code
+        else
+            t_index = 1
         end
         s2 = self:concatFrames(index+t_index)
-	--print("Action1: "..self.a[ar_index]..", Action2: "..self.a[ar_index+t_index]..", IndexDiff: "..t_index.." Reward: "..self.r[ar_index+(t_index-1)].." RealReward: "..self.real_r[ar_index+(t_index-1)].." Terminal: "..self.t[ar_index+t_index])
-
-        return s, self.a[ar_index], self.r[ar_index+(t_index-1)], self.real_r[ar_index+(t_index-1)], s2, self.t[ar_index+t_index] -- we added t_index
+	      --print("Action1: "..self.a[ar_index]..", Action2: "..self.a[ar_index+t_index]..", IndexDiff: "..t_index.." Reward: "..self.r[ar_index+(t_index-1)].." RealReward: "..self.real_r[ar_index+(t_index-1)].." Terminal: "..self.t[ar_index+t_index])
+        return s, self.a[ar_index], self.r[ar_index+(t_index-1)], self.real_r[ar_index+(t_index-1)], s2, self.t[ar_index+t_index]
     end
 end
 
@@ -463,17 +470,14 @@ function trans:add(s, a, r, real_r, term)
     else
         self.t[self.insertIndex] = 0
     end
-    --if self.insertIndex > 1 then
-    --    print("trans:add - " .. self.insertIndex .. " " .. self.r[self.insertIndex-1] .. " " ..self.t[self.insertIndex])
-    --end
-    -- our code, search back until find terminal (store whole episode)
+
+    -- For success memory, we want to store whole trajectory (or last S steps), so need to search backwards for first state of trajectory
     if self.insertIndex > 2 and self.real_r[self.insertIndex-1] == 0 and self.t[self.insertIndex] == 1 then -- if previous s,a ended in terminal gave us success reward
         local index = 1
         while self.t[self.insertIndex-index-1] ~= 1 and (self.insertIndex - index) > 2 and index < maxPriorityMemDepth do
             index = index + 1
         end
         index = index - 1
-	      local chent_index = index -- temp for print of index diff
         while (index >= 0) do
             self.successIndex = self.successIndex + 1
             if self.successIndex > self.successMemSize then
@@ -491,7 +495,6 @@ function trans:add(s, a, r, real_r, term)
             index = index - 1
             --print("successIndex: " .. self.successIndex)
         end
-	--print("Success: End - Reward = "..self.success_real_r[self.successIndex].." Terminal = "..self.success_t[self.successIndex].." IndexDiff = "..chent_index)
     end
 end
 
