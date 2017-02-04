@@ -150,7 +150,8 @@ function setup(_opt)
 
     local MCgameActions_primitive = {1,3,4,0,5} -- this is our game actions table
     local MCgameActions = MCgameActions_primitive:copy()
-    local optionsActions = {} -- these actions are correlated to an OPTION
+    local options = {} -- these actions are correlated to an OPTION, i.e an action the HDRLN selects that is mapped to a skill
+    local optionsActions = {} -- for each skill we map availiable actions. Currently each skill maps all aviliable actions (doesn't have to be this way)
 
     local max_action_val = MCgameActions_primitive[1]
     for i = 2, #MCgameActions_primitive
@@ -161,20 +162,15 @@ function setup(_opt)
     for i = 1, num_skills
     do
       MCgameActions[#MCgameActions + 1] = i + max_action_val
-      optionsActions[#optionsActions + 1] = i + max_action_val
+      options[#options + 1] = i + max_action_val -- we want all actions mapped to skills to be larger than the maximal primitive action value
+      optionsActions[#optionsActions + 1] = MCgameActions_primitive -- map all primitive actions for each skill
     end
 
-    local controlActions = {6,7,8,9} --{1,3,4,5,0,6,7,8} -- total is 9 -- this is our game actions table
-    -- availiable actions per agent -- make this dynamic
-    local navigateActions = {1,3,4,0,5}
-    local pickupActions =  {1,3,4,0,5}
-    local breakActions =  {1,3,4,0,5}
-    local placeActions =  {1,3,4,0,5}
 
     -- agent options
     _opt.agent_params.actions   = MCgameActions
-    _opt.agent_params.options	= optionsActions
-    _opt.agent_params.optionsActions = {navigateActions, pickupActions, breakActions, placeActions}
+    _opt.agent_params.options	= options
+    _opt.agent_params.optionsActions = optionsActions
     _opt.agent_params.gpu       = _opt.gpu
     _opt.agent_params.best      = _opt.best
     _opt.agent_params.distilled_network = distilled_hdrln
@@ -192,7 +188,7 @@ function setup(_opt)
     if not _opt.agent_params.state_dim then
         _opt.agent_params.state_dim = gameEnv:nObsFeature()
     end
-    if distilled_hdrln then
+    if distilled_hdrln then -- distilled means single main network with multiple skills integrated into it
       _opt.distilled_agent_params.actions   = navigateActions
       _opt.distilled_agent_params.gpu       = _opt.gpu
       _opt.distilled_agent_params.best      = _opt.best
