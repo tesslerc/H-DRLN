@@ -20,7 +20,7 @@ function nql:__init(args)
     self.actions    = args.actions
     self.n_actions  = #self.actions
 
-    self.finished = false -- has agent ever finished the task??
+    self.finished = false -- Keep exploration at a higher value until agent succeeds at-least once
     if args.options then
         self.options    = args.options
         self.optionActions = args.optionsActions
@@ -558,15 +558,17 @@ end
 
 
 function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
-    if tonumber(reward) == 0 then -- this is for greedy exploration while not finished even once
-	self.finished = true
+    if tonumber(reward) == 0 then -- this is for greedy exploration while not finished even once (reward = 0 means finished task)
+	     self.finished = true
     end
 
     -- Preprocess state (will be set to nil if terminal)
     local state = self:preprocess(rawstate):float()
     local curState
-    local realReward = reward
+    local realReward = reward -- we also want to keep real reward, due to discounted reward for a skill that leads to terminal will be < 0 (for TransitionTable)
     if self.lastAction ~= nil then
+        -- if an option is in play, we store the accumulated discounted reward in the transition memory, instead of the immediate reward.
+        -- this way R[t+N] = sum(R[t+i] * gamma^i) for i from 1 to N
         if self.main_agent == true and #self.options > 0 then
             for i = 1, #self.options do
                 if self.actions[self.lastAction] == self.options[i] or self.lastAction > self.n_actions then
@@ -686,49 +688,47 @@ function nql:perceive(reward, rawstate, terminal, testing, testing_ep)
     end
 
     if not terminal then
-        if self.option_actions_left == 0 then -- our code
+        -- if not an option playing, allow HDRLN to select
+        if self.option_actions_left == 0 then
             actionIndex = self:eGreedy(curState, testing_ep)
             gameAction = actionIndex
             self.lastOption = 0
 	      end
-        -- our code
+
         local isOption = false
         if self.main_agent then
+            -- check if action is an option or not
             if actionIndex > #self.primitive_actions then
                 isOption = true
             end
         end
 
-        if isOption and self.main_agent == true and self.option_actions_left == 0 then -- adjust to multiple options
+        -- if option selected, and HDRLN in control, restart option run
+        if isOption and self.main_agent == true and self.option_actions_left == 0 then
             self.lastOption = actionIndex
             self.option_actions_left = self.option_length
             self.option_accumulated_reward = 0
         end
 	      print("Option actions left "..self.option_actions_left)
         if self.option_actions_left > 0 and self.main_agent == true then
+            -- during option, the gameAction is defined by the selected option
             gameAction = skillAction[self.lastOption-self.n_primitive_actions]
 
+            -- In transition table, first action played by option is set to option index.
+            -- after that, we set index to be an out-of-range index so we know not to learn from it.
             if self.option_actions_left ~= self.option_length then
-                actionIndex = self.n_actions + 1 -- non possible action = during option
+                actionIndex = self.n_actions + 1 -- out of index action -> during skill play
             end
             self.option_actions_left = self.option_actions_left - 1
         end
-        -- end our code
     else
         self.option_actions_left = 0
         self.lastOption = 0
     end
-    -- %%%%% store option index and option-policy index(index for actions chosen from the option policy)
+    -- store option index and option-policy index(index for actions chosen from the option policy)
     self.transitions:add_recent_action(actionIndex)
 
-    -- This section disabled, we run it in parallel while simulator is playing
-    --Do some Q-learning updates
-    --if self.numSteps > self.learn_start and not testing and
-    --self.numSteps % self.update_freq == 0 and actionIndex <= self.n_actions then
-    --for i = 1, self.n_replay do
-    --self:qLearnMinibatch()
-    --end
-    --end
+    -- Q learning update moved from here to train_agent, we do this in parallel while simulator is playing (saves some time).
 
     if not testing and actionIndex <= self.n_actions then -- added so only main network will forward numSteps
         self.numSteps = self.numSteps + 1
@@ -766,6 +766,8 @@ function nql:eGreedy(state, testing_ep)
     self.ep = testing_ep or (self.ep_end +
         math.max(0, (self.ep_start - self.ep_end) * (self.ep_endt -
             math.max(0, self.numSteps - self.learn_start))/self.ep_endt))
+
+    -- if agent didn't finish task yet, keep minimal epsilon at 50%
     if not testing_ep and self.finished == false then
 	     self.ep = math.max(self.ep, 0.5)
     end
