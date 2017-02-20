@@ -79,10 +79,10 @@ for i in range(len(terminal)):
         stopIndex = i - 1
         # print(str(reward[i - 1]))
 '''
-data = h5py.File('./activationsClean.h5', 'r').get('data')[1:stopIndex + 1, :]
-act = h5py.File('./actionsClean.h5', 'r').get('data')
-states = h5py.File('./statesClean.h5', 'r').get('data')[1:stopIndex + 1, :]
-tsne = h5py.File('./lowd_activations_800.h5', 'r').get('data')[1:stopIndex + 1, :]
+data = h5py.File('./activationsClean.h5', 'r').get('data')[0:stopIndex + 1, :]
+act = h5py.File('./actionsClean.h5', 'r').get('data')[0:stopIndex + 1]
+states = h5py.File('./statesClean.h5', 'r').get('data')[0:stopIndex + 1, :]
+tsne = h5py.File('./lowd_activations_800.h5', 'r').get('data')[0:stopIndex + 1, :]
 print('Data loaded.')
 
 colors = np.array([[20,0,0],[0,40,0],[0,0,50],[100, 60, 20], [90, 60, 160], [25, 50, 0], [0, 25, 50], [0, 50, 25]])
